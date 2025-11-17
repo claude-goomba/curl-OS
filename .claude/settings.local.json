@@ -1,0 +1,19 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(curl:*)",
+      "Bash(unzip:*)",
+      "Bash(netstat:*)",
+      "Bash(python3:*)",
+      "Bash(node:*)",
+      "Bash(wget:*)",
+      "Bash(git clone:*)",
+      "Bash(npm install)",
+      "Bash(find:*)",
+      "Bash(rm:*)",
+      "Bash(cat:*)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}
