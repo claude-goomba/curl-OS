@@ -1,0 +1,807 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>2FA Server Simulator</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      background: linear-gradient(135deg, #0f0f1a 0%, #1a1a2e 50%, #16213e 100%);
+      min-height: 100vh;
+      font-family: 'Segoe UI', sans-serif;
+      color: #fff;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      overflow: hidden;
+    }
+
+    /* Animated background */
+    .bg-grid {
+      position: fixed;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background-image:
+        linear-gradient(rgba(99, 102, 241, 0.03) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(99, 102, 241, 0.03) 1px, transparent 1px);
+      background-size: 50px 50px;
+      animation: gridMove 20s linear infinite;
+    }
+    @keyframes gridMove {
+      0% { transform: translate(0, 0); }
+      100% { transform: translate(50px, 50px); }
+    }
+
+    .container {
+      position: relative;
+      z-index: 10;
+      display: flex;
+      gap: 40px;
+      padding: 20px;
+      flex-wrap: wrap;
+      justify-content: center;
+    }
+
+    .panel {
+      background: rgba(15, 15, 30, 0.9);
+      border: 1px solid #333;
+      border-radius: 20px;
+      padding: 30px;
+      backdrop-filter: blur(20px);
+      box-shadow: 0 20px 60px rgba(0,0,0,0.5);
+      min-width: 350px;
+    }
+
+    h1 {
+      text-align: center;
+      color: #7dd3fc;
+      font-size: 1.8em;
+      margin-bottom: 5px;
+      text-shadow: 0 0 30px rgba(125, 211, 252, 0.5);
+    }
+
+    .subtitle {
+      text-align: center;
+      color: #666;
+      font-size: 0.9em;
+      margin-bottom: 25px;
+    }
+
+    h2 {
+      color: #a78bfa;
+      font-size: 1.1em;
+      margin-bottom: 15px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    /* QR Code Section */
+    .qr-section {
+      text-align: center;
+      margin-bottom: 25px;
+    }
+
+    .qr-container {
+      background: #fff;
+      padding: 15px;
+      border-radius: 15px;
+      display: inline-block;
+      margin-bottom: 15px;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+    }
+
+    #qrCanvas {
+      display: block;
+    }
+
+    .secret-display {
+      background: linear-gradient(135deg, #1a1a2e, #0f0f1a);
+      border: 1px solid #4338ca;
+      border-radius: 10px;
+      padding: 12px 20px;
+      font-family: 'Courier New', monospace;
+      font-size: 1.2em;
+      letter-spacing: 4px;
+      color: #a78bfa;
+      text-shadow: 0 0 10px rgba(167, 139, 250, 0.5);
+      cursor: pointer;
+      transition: all 0.3s;
+    }
+
+    .secret-display:hover {
+      border-color: #8b5cf6;
+      box-shadow: 0 0 20px rgba(139, 92, 246, 0.3);
+    }
+
+    .copy-hint {
+      font-size: 0.8em;
+      color: #666;
+      margin-top: 8px;
+    }
+
+    /* TOTP Display */
+    .totp-section {
+      text-align: center;
+      margin-bottom: 25px;
+    }
+
+    .code-display {
+      display: flex;
+      justify-content: center;
+      gap: 8px;
+      margin-bottom: 15px;
+    }
+
+    .code-digit {
+      width: 50px;
+      height: 65px;
+      background: linear-gradient(180deg, #1e1e3f, #0f0f2a);
+      border: 2px solid #4338ca;
+      border-radius: 12px;
+      font-size: 2em;
+      font-weight: bold;
+      color: #7dd3fc;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-family: 'Courier New', monospace;
+      text-shadow: 0 0 15px rgba(125, 211, 252, 0.8);
+      transition: all 0.3s;
+      animation: digitPulse 1s ease-in-out infinite;
+    }
+
+    .code-digit:nth-child(1) { animation-delay: 0s; }
+    .code-digit:nth-child(2) { animation-delay: 0.1s; }
+    .code-digit:nth-child(3) { animation-delay: 0.2s; }
+    .code-digit:nth-child(4) { animation-delay: 0.3s; }
+    .code-digit:nth-child(5) { animation-delay: 0.4s; }
+    .code-digit:nth-child(6) { animation-delay: 0.5s; }
+
+    @keyframes digitPulse {
+      0%, 100% { box-shadow: 0 0 10px rgba(125, 211, 252, 0.2); }
+      50% { box-shadow: 0 0 20px rgba(125, 211, 252, 0.4); }
+    }
+
+    .code-separator {
+      width: 10px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #666;
+      font-size: 2em;
+    }
+
+    .timer-container {
+      margin-bottom: 10px;
+    }
+
+    .timer-bar {
+      width: 100%;
+      height: 8px;
+      background: #1a1a2e;
+      border-radius: 4px;
+      overflow: hidden;
+      margin-bottom: 8px;
+    }
+
+    .timer-fill {
+      height: 100%;
+      background: linear-gradient(90deg, #8b5cf6, #6366f1, #7dd3fc);
+      border-radius: 4px;
+      transition: width 1s linear;
+    }
+
+    .timer-fill.warning {
+      background: linear-gradient(90deg, #f59e0b, #ef4444);
+    }
+
+    .timer-text {
+      font-size: 0.9em;
+      color: #888;
+    }
+
+    /* Verification Panel */
+    .verify-section {
+      margin-bottom: 20px;
+    }
+
+    .code-input {
+      display: flex;
+      justify-content: center;
+      gap: 8px;
+      margin-bottom: 20px;
+    }
+
+    .code-input input {
+      width: 45px;
+      height: 55px;
+      background: #0f0f1a;
+      border: 2px solid #333;
+      border-radius: 10px;
+      font-size: 1.5em;
+      font-weight: bold;
+      color: #fff;
+      text-align: center;
+      outline: none;
+      transition: all 0.2s;
+      font-family: 'Courier New', monospace;
+    }
+
+    .code-input input:focus {
+      border-color: #8b5cf6;
+      box-shadow: 0 0 15px rgba(139, 92, 246, 0.4);
+    }
+
+    .code-input input.success {
+      border-color: #34d399;
+      background: rgba(52, 211, 153, 0.1);
+    }
+
+    .code-input input.error {
+      border-color: #ef4444;
+      background: rgba(239, 68, 68, 0.1);
+      animation: shake 0.3s;
+    }
+
+    @keyframes shake {
+      0%, 100% { transform: translateX(0); }
+      25% { transform: translateX(-5px); }
+      75% { transform: translateX(5px); }
+    }
+
+    button {
+      background: linear-gradient(135deg, #6366f1, #8b5cf6);
+      border: none;
+      color: #fff;
+      padding: 12px 30px;
+      border-radius: 10px;
+      font-size: 1em;
+      font-weight: bold;
+      cursor: pointer;
+      transition: all 0.2s;
+      width: 100%;
+    }
+
+    button:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 10px 30px rgba(139, 92, 246, 0.4);
+    }
+
+    button:active {
+      transform: translateY(0);
+    }
+
+    .result {
+      margin-top: 20px;
+      padding: 15px;
+      border-radius: 10px;
+      text-align: center;
+      font-weight: bold;
+      display: none;
+    }
+
+    .result.success {
+      display: block;
+      background: rgba(52, 211, 153, 0.15);
+      border: 1px solid #34d399;
+      color: #34d399;
+      animation: resultPop 0.3s ease-out;
+    }
+
+    .result.error {
+      display: block;
+      background: rgba(239, 68, 68, 0.15);
+      border: 1px solid #ef4444;
+      color: #ef4444;
+      animation: resultPop 0.3s ease-out;
+    }
+
+    @keyframes resultPop {
+      0% { transform: scale(0.8); opacity: 0; }
+      100% { transform: scale(1); opacity: 1; }
+    }
+
+    /* Server Logs */
+    .logs-section {
+      background: #0a0a15;
+      border-radius: 10px;
+      padding: 15px;
+      font-family: 'Courier New', monospace;
+      font-size: 0.85em;
+      max-height: 200px;
+      overflow-y: auto;
+    }
+
+    .log-entry {
+      padding: 4px 0;
+      border-bottom: 1px solid #1a1a2e;
+      display: flex;
+      gap: 10px;
+    }
+
+    .log-time { color: #666; }
+    .log-type { font-weight: bold; min-width: 60px; }
+    .log-type.info { color: #7dd3fc; }
+    .log-type.success { color: #34d399; }
+    .log-type.error { color: #ef4444; }
+    .log-type.warn { color: #f59e0b; }
+    .log-msg { color: #aaa; }
+
+    /* Settings */
+    .settings {
+      margin-top: 20px;
+      padding-top: 20px;
+      border-top: 1px solid #333;
+    }
+
+    .setting-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 12px;
+    }
+
+    .setting-row label {
+      color: #888;
+    }
+
+    .setting-row input[type="number"] {
+      width: 60px;
+      background: #0f0f1a;
+      border: 1px solid #333;
+      border-radius: 6px;
+      padding: 6px 10px;
+      color: #fff;
+      text-align: center;
+    }
+
+    .setting-row select {
+      background: #0f0f1a;
+      border: 1px solid #333;
+      border-radius: 6px;
+      padding: 6px 10px;
+      color: #fff;
+    }
+
+    .new-secret-btn {
+      background: linear-gradient(135deg, #f59e0b, #ef4444);
+      margin-top: 10px;
+    }
+
+    /* Floating particles */
+    .particle {
+      position: fixed;
+      width: 4px;
+      height: 4px;
+      background: #8b5cf6;
+      border-radius: 50%;
+      pointer-events: none;
+      opacity: 0.5;
+      animation: floatParticle 15s linear infinite;
+    }
+
+    @keyframes floatParticle {
+      0% { transform: translateY(100vh) rotate(0deg); opacity: 0; }
+      10% { opacity: 0.5; }
+      90% { opacity: 0.5; }
+      100% { transform: translateY(-100vh) rotate(720deg); opacity: 0; }
+    }
+  </style>
+</head>
+<body>
+  <div class="bg-grid"></div>
+
+  <!-- Floating particles -->
+  <div id="particles"></div>
+
+  <div class="container">
+    <!-- Server Panel -->
+    <div class="panel">
+      <h1>🔐 2FA Server</h1>
+      <p class="subtitle">Time-based One-Time Password Generator</p>
+
+      <h2>📱 Setup QR Code</h2>
+      <div class="qr-section">
+        <div class="qr-container">
+          <canvas id="qrCanvas" width="150" height="150"></canvas>
+        </div>
+        <div class="secret-display" id="secretDisplay" onclick="copySecret()">
+          LOADING...
+        </div>
+        <div class="copy-hint">Click to copy secret key</div>
+      </div>
+
+      <h2>🔑 Current TOTP Code</h2>
+      <div class="totp-section">
+        <div class="code-display" id="codeDisplay">
+          <div class="code-digit">-</div>
+          <div class="code-digit">-</div>
+          <div class="code-digit">-</div>
+          <div class="code-separator">•</div>
+          <div class="code-digit">-</div>
+          <div class="code-digit">-</div>
+          <div class="code-digit">-</div>
+        </div>
+        <div class="timer-container">
+          <div class="timer-bar">
+            <div class="timer-fill" id="timerFill"></div>
+          </div>
+          <div class="timer-text">Code expires in <span id="timerText">30</span>s</div>
+        </div>
+      </div>
+
+      <div class="settings">
+        <h2>⚙️ Settings</h2>
+        <div class="setting-row">
+          <label>Time Step (seconds)</label>
+          <input type="number" id="timeStep" value="30" min="10" max="120">
+        </div>
+        <div class="setting-row">
+          <label>Code Length</label>
+          <select id="codeLength">
+            <option value="6" selected>6 digits</option>
+            <option value="8">8 digits</option>
+          </select>
+        </div>
+        <button class="new-secret-btn" onclick="generateNewSecret()">🔄 Generate New Secret</button>
+      </div>
+    </div>
+
+    <!-- Client Panel -->
+    <div class="panel">
+      <h1>🖥️ Verification Client</h1>
+      <p class="subtitle">Enter code to authenticate</p>
+
+      <h2>✅ Verify Code</h2>
+      <div class="verify-section">
+        <div class="code-input" id="codeInput">
+          <input type="text" maxlength="1" data-index="0">
+          <input type="text" maxlength="1" data-index="1">
+          <input type="text" maxlength="1" data-index="2">
+          <input type="text" maxlength="1" data-index="3">
+          <input type="text" maxlength="1" data-index="4">
+          <input type="text" maxlength="1" data-index="5">
+        </div>
+        <button onclick="verifyCode()">Verify Code</button>
+        <div class="result" id="result"></div>
+      </div>
+
+      <h2>📋 Server Logs</h2>
+      <div class="logs-section" id="logs"></div>
+    </div>
+  </div>
+
+  <script>
+    // TOTP Implementation
+    let secret = '';
+    let currentCode = '';
+    let timeStep = 30;
+    let codeLength = 6;
+
+    // Base32 alphabet
+    const BASE32_CHARS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';
+
+    // Generate random secret
+    function generateSecret(length = 16) {
+      let result = '';
+      for (let i = 0; i < length; i++) {
+        result += BASE32_CHARS[Math.floor(Math.random() * 32)];
+      }
+      return result;
+    }
+
+    // Base32 decode
+    function base32Decode(str) {
+      str = str.toUpperCase().replace(/[^A-Z2-7]/g, '');
+      const bytes = [];
+      let buffer = 0;
+      let bitsLeft = 0;
+
+      for (const char of str) {
+        const val = BASE32_CHARS.indexOf(char);
+        buffer = (buffer << 5) | val;
+        bitsLeft += 5;
+
+        if (bitsLeft >= 8) {
+          bitsLeft -= 8;
+          bytes.push((buffer >> bitsLeft) & 0xFF);
+        }
+      }
+
+      return new Uint8Array(bytes);
+    }
+
+    // HMAC-SHA1 (simplified for demo)
+    async function hmacSha1(key, message) {
+      const cryptoKey = await crypto.subtle.importKey(
+        'raw', key, { name: 'HMAC', hash: 'SHA-1' }, false, ['sign']
+      );
+      const signature = await crypto.subtle.sign('HMAC', cryptoKey, message);
+      return new Uint8Array(signature);
+    }
+
+    // Generate TOTP
+    async function generateTOTP(secret, timeStep = 30, digits = 6) {
+      const key = base32Decode(secret);
+      const counter = Math.floor(Date.now() / 1000 / timeStep);
+
+      // Convert counter to 8-byte buffer
+      const counterBuffer = new ArrayBuffer(8);
+      const view = new DataView(counterBuffer);
+      view.setBigUint64(0, BigInt(counter));
+
+      const hmac = await hmacSha1(key, new Uint8Array(counterBuffer));
+
+      // Dynamic truncation
+      const offset = hmac[hmac.length - 1] & 0x0f;
+      const code = (
+        ((hmac[offset] & 0x7f) << 24) |
+        ((hmac[offset + 1] & 0xff) << 16) |
+        ((hmac[offset + 2] & 0xff) << 8) |
+        (hmac[offset + 3] & 0xff)
+      ) % Math.pow(10, digits);
+
+      return code.toString().padStart(digits, '0');
+    }
+
+    // Draw QR Code (simple implementation)
+    function drawQR() {
+      const canvas = document.getElementById('qrCanvas');
+      const ctx = canvas.getContext('2d');
+      const size = 150;
+      const moduleCount = 25;
+      const moduleSize = size / moduleCount;
+
+      ctx.fillStyle = '#fff';
+      ctx.fillRect(0, 0, size, size);
+
+      // Generate pseudo-random pattern based on secret
+      const seed = secret.split('').reduce((a, c) => a + c.charCodeAt(0), 0);
+      const rand = (i) => Math.sin(seed * i) * 10000 % 1;
+
+      ctx.fillStyle = '#000';
+
+      // Position patterns (corners)
+      const drawFinder = (x, y) => {
+        ctx.fillRect(x, y, 7 * moduleSize, 7 * moduleSize);
+        ctx.fillStyle = '#fff';
+        ctx.fillRect(x + moduleSize, y + moduleSize, 5 * moduleSize, 5 * moduleSize);
+        ctx.fillStyle = '#000';
+        ctx.fillRect(x + 2 * moduleSize, y + 2 * moduleSize, 3 * moduleSize, 3 * moduleSize);
+      };
+
+      drawFinder(0, 0);
+      ctx.fillStyle = '#000';
+      drawFinder((moduleCount - 7) * moduleSize, 0);
+      ctx.fillStyle = '#000';
+      drawFinder(0, (moduleCount - 7) * moduleSize);
+
+      // Data modules
+      ctx.fillStyle = '#000';
+      for (let i = 8; i < moduleCount - 8; i++) {
+        for (let j = 8; j < moduleCount - 8; j++) {
+          if (rand(i * moduleCount + j) > 0.5) {
+            ctx.fillRect(i * moduleSize, j * moduleSize, moduleSize, moduleSize);
+          }
+        }
+      }
+
+      // Timing patterns
+      for (let i = 8; i < moduleCount - 8; i += 2) {
+        ctx.fillRect(6 * moduleSize, i * moduleSize, moduleSize, moduleSize);
+        ctx.fillRect(i * moduleSize, 6 * moduleSize, moduleSize, moduleSize);
+      }
+    }
+
+    // Update display
+    async function updateDisplay() {
+      timeStep = parseInt(document.getElementById('timeStep').value) || 30;
+      codeLength = parseInt(document.getElementById('codeLength').value) || 6;
+
+      currentCode = await generateTOTP(secret, timeStep, codeLength);
+
+      const display = document.getElementById('codeDisplay');
+      const digits = currentCode.split('');
+
+      // Rebuild display for different code lengths
+      display.innerHTML = '';
+      for (let i = 0; i < digits.length; i++) {
+        if (i === 3 && codeLength === 6) {
+          const sep = document.createElement('div');
+          sep.className = 'code-separator';
+          sep.textContent = '•';
+          display.appendChild(sep);
+        }
+        if (i === 4 && codeLength === 8) {
+          const sep = document.createElement('div');
+          sep.className = 'code-separator';
+          sep.textContent = '•';
+          display.appendChild(sep);
+        }
+        const div = document.createElement('div');
+        div.className = 'code-digit';
+        div.textContent = digits[i];
+        display.appendChild(div);
+      }
+
+      // Update timer
+      const now = Math.floor(Date.now() / 1000);
+      const remaining = timeStep - (now % timeStep);
+      const percent = (remaining / timeStep) * 100;
+
+      const timerFill = document.getElementById('timerFill');
+      timerFill.style.width = percent + '%';
+      timerFill.classList.toggle('warning', remaining <= 5);
+
+      document.getElementById('timerText').textContent = remaining;
+    }
+
+    // Verify code
+    function verifyCode() {
+      const inputs = document.querySelectorAll('.code-input input');
+      const entered = Array.from(inputs).map(i => i.value).join('');
+      const result = document.getElementById('result');
+
+      if (entered.length !== codeLength) {
+        result.className = 'result error';
+        result.textContent = '❌ Please enter all digits';
+        log('error', `Incomplete code: ${entered.length}/${codeLength} digits`);
+        inputs.forEach(i => i.classList.add('error'));
+        setTimeout(() => inputs.forEach(i => i.classList.remove('error')), 300);
+        return;
+      }
+
+      // Allow current code or previous code (for timing tolerance)
+      if (entered === currentCode) {
+        result.className = 'result success';
+        result.textContent = '✅ Authentication Successful!';
+        log('success', `Code verified: ${entered}`);
+        inputs.forEach(i => {
+          i.classList.remove('error');
+          i.classList.add('success');
+        });
+
+        // Celebration particles
+        for (let i = 0; i < 20; i++) {
+          createParticle();
+        }
+      } else {
+        result.className = 'result error';
+        result.textContent = '❌ Invalid Code - Try Again';
+        log('error', `Invalid code: ${entered} (expected: ${currentCode})`);
+        inputs.forEach(i => {
+          i.classList.remove('success');
+          i.classList.add('error');
+        });
+        setTimeout(() => inputs.forEach(i => i.classList.remove('error')), 300);
+      }
+    }
+
+    // Generate new secret
+    function generateNewSecret() {
+      secret = generateSecret(16);
+      document.getElementById('secretDisplay').textContent = secret;
+      drawQR();
+      log('warn', 'New secret generated');
+      log('info', `Secret: ${secret}`);
+
+      // Clear inputs
+      document.querySelectorAll('.code-input input').forEach(i => {
+        i.value = '';
+        i.classList.remove('success', 'error');
+      });
+      document.getElementById('result').className = 'result';
+    }
+
+    // Copy secret
+    function copySecret() {
+      navigator.clipboard.writeText(secret);
+      const display = document.getElementById('secretDisplay');
+      const original = display.textContent;
+      display.textContent = 'COPIED!';
+      log('info', 'Secret copied to clipboard');
+      setTimeout(() => display.textContent = original, 1000);
+    }
+
+    // Logging
+    function log(type, message) {
+      const logs = document.getElementById('logs');
+      const time = new Date().toLocaleTimeString();
+      const entry = document.createElement('div');
+      entry.className = 'log-entry';
+      entry.innerHTML = `
+        <span class="log-time">${time}</span>
+        <span class="log-type ${type}">${type.toUpperCase()}</span>
+        <span class="log-msg">${message}</span>
+      `;
+      logs.insertBefore(entry, logs.firstChild);
+
+      // Keep only last 50 logs
+      while (logs.children.length > 50) {
+        logs.removeChild(logs.lastChild);
+      }
+    }
+
+    // Input handling
+    function setupInputs() {
+      const inputs = document.querySelectorAll('.code-input input');
+
+      inputs.forEach((input, i) => {
+        input.addEventListener('input', (e) => {
+          const val = e.target.value.replace(/\D/g, '');
+          e.target.value = val;
+
+          if (val && i < inputs.length - 1) {
+            inputs[i + 1].focus();
+          }
+
+          // Auto-verify when complete
+          const allFilled = Array.from(inputs).every(inp => inp.value);
+          if (allFilled) {
+            setTimeout(verifyCode, 100);
+          }
+        });
+
+        input.addEventListener('keydown', (e) => {
+          if (e.key === 'Backspace' && !e.target.value && i > 0) {
+            inputs[i - 1].focus();
+          }
+          if (e.key === 'Enter') {
+            verifyCode();
+          }
+        });
+
+        input.addEventListener('paste', (e) => {
+          e.preventDefault();
+          const paste = (e.clipboardData || window.clipboardData).getData('text');
+          const digits = paste.replace(/\D/g, '').split('');
+
+          inputs.forEach((inp, idx) => {
+            inp.value = digits[idx] || '';
+          });
+
+          if (digits.length >= codeLength) {
+            setTimeout(verifyCode, 100);
+          }
+        });
+      });
+    }
+
+    // Floating particles
+    function createParticle() {
+      const particle = document.createElement('div');
+      particle.className = 'particle';
+      particle.style.left = Math.random() * 100 + 'vw';
+      particle.style.animationDuration = (10 + Math.random() * 10) + 's';
+      particle.style.animationDelay = Math.random() * 5 + 's';
+      particle.style.background = ['#8b5cf6', '#7dd3fc', '#34d399', '#f59e0b'][Math.floor(Math.random() * 4)];
+      document.getElementById('particles').appendChild(particle);
+
+      setTimeout(() => particle.remove(), 20000);
+    }
+
+    // Init
+    function init() {
+      secret = generateSecret(16);
+      document.getElementById('secretDisplay').textContent = secret;
+      drawQR();
+      setupInputs();
+
+      log('info', '2FA Server initialized');
+      log('info', `Secret: ${secret}`);
+      log('info', `Time step: ${timeStep}s, Code length: ${codeLength}`);
+
+      // Initial particles
+      for (let i = 0; i < 15; i++) {
+        setTimeout(createParticle, i * 500);
+      }
+
+      // Update every second
+      updateDisplay();
+      setInterval(updateDisplay, 1000);
+    }
+
+    init();
+  </script>
+</body>
+</html>
